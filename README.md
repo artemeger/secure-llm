@@ -49,8 +49,8 @@ Accepted residuals (documented, not mitigated in this setup):
 ## Repository layout
 
 ```
-a-vllm/        Machine A stack (compose, vllm-cmd.sh, nginx.conf, .env.example)
-b-opencode/    Machine B stack (Dockerfile, compose, gateway.conf, opencode.json,
+vllm/        Machine A stack (compose, vllm-cmd.sh, nginx.conf, .env.example)
+opencode/    Machine B stack (Dockerfile, compose, gateway.conf, opencode.json,
                tools/ build-time toolchain, workspace/)
 test/          mock-vllm.py — OpenAI stub for no-GPU testing
 ```
@@ -64,18 +64,18 @@ test/          mock-vllm.py — OpenAI stub for no-GPU testing
    hf download bottlecapai/ThinkingCap-Qwen3.8-27B-NVFP4
    # lands in ~/.cache/huggingface — the directory compose mounts
    ```
-3. `cd a-vllm && cp .env.example .env` → set `A_LAN_IP` (and `HF_TOKEN` only
+3. `cd vllm && cp .env.example .env` → set `A_LAN_IP` (and `HF_TOKEN` only
    if the repo is gated).
 4. `docker compose up -d` → wait for `vllm` to become `healthy`
    (minutes; MTP warmup). `docker compose ps`
 
-The full vLLM command lives in **`a-vllm/vllm-cmd.sh` only**. Swap model or
+The full vLLM command lives in **`vllm/vllm-cmd.sh` only**. Swap model or
 flags: edit that file, `docker compose restart vllm`. Swap the image:
 `VLLM_IMAGE=` in `.env`.
 
 ## Setup — Machine B
 
-1. `cd b-opencode && cp .env.example .env` → set `A_LAN_IP` and `TOOLS`,
+1. `cd opencode && cp .env.example .env` → set `A_LAN_IP` and `TOOLS`,
    then **sync the literal IP in `gateway.conf`**.
 2. Put your project files in `workspace/`.
 3. `docker compose up -d --build` (internet once, for the build).
@@ -90,7 +90,7 @@ time (conventions in `tools/README.md`). JVM preset:
 
 Not testable without a GPU. Once the box is up:
 
-1. `docker compose up -d` in `a-vllm/`; `docker compose logs -f vllm` —
+1. `docker compose up -d` in `vllm/`; `docker compose logs -f vllm` —
    expect engine init, `Uvicorn running on http://0.0.0.0:8000`, then
    `healthy` in `docker compose ps`.
 2. `curl -s http://<A_IP>:8080/v1/models` → lists the model.
@@ -103,7 +103,7 @@ Troubleshooting:
 |---|---|
 | OOM at engine init | lower `--gpu-memory-utilization` / `--max-num-seqs` in `vllm-cmd.sh` |
 | MTP / speculative error | drop the `--speculative-config` line in `vllm-cmd.sh` |
-| model not found | id must equal the `--model` string in `vllm-cmd.sh` AND the key in `b-opencode/opencode.json` |
+| model not found | id must equal the `--model` string in `vllm-cmd.sh` AND the key in `opencode/opencode.json` |
 | 502 from B's gateway | A down / model not loaded yet (`docker compose ps` on A) |
 
 ## Testing without a GPU (mock upstream)
@@ -122,7 +122,7 @@ docker run -d --name vllm-mock --network secure-llm-vllm-backend \
   python:3.12-slim python /mock.py
 docker run -d --name secure-llm-vllm-nginx --network secure-llm-vllm-frontend \
   --network secure-llm-vllm-backend -p 127.0.0.1:8080:8080 \
-  -v "$PWD/a-vllm/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:stable
+  -v "$PWD/vllm/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:stable
 
 curl -s http://127.0.0.1:8080/v1/models    # canned model list
 curl -sN -X POST http://127.0.0.1:8080/v1/chat/completions \
@@ -139,9 +139,9 @@ BRIDGE_IP=172.17.0.1
 docker rm -f secure-llm-vllm-nginx
 docker run -d --name secure-llm-vllm-nginx --network secure-llm-vllm-frontend \
   --network secure-llm-vllm-backend -p 0.0.0.0:8080:8080 \
-  -v "$PWD/a-vllm/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:stable
-sed -i "s|proxy_pass http://192.168.1.10:8080;|proxy_pass http://${BRIDGE_IP}:8080;|" b-opencode/gateway.conf
-cd b-opencode && docker compose up -d --build
+  -v "$PWD/vllm/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:stable
+sed -i "s|proxy_pass http://192.168.1.10:8080;|proxy_pass http://${BRIDGE_IP}:8080;|" opencode/gateway.conf
+cd opencode && docker compose up -d --build
 docker compose up -d --force-recreate gateway    # pick up the edited conf
 docker compose exec opencode curl -s http://gateway:8080/v1/models    # canned list (full chain)
 docker compose exec opencode curl -m 3 http://1.1.1.1 || echo "air-gapped: ok"
@@ -150,7 +150,7 @@ docker compose exec opencode getent hosts example.com || echo "air-gapped: ok (n
 # 3. cleanup (restores the shipped gateway.conf)
 cd .. && docker rm -f vllm-mock secure-llm-vllm-nginx
 docker network rm secure-llm-vllm-backend secure-llm-vllm-frontend
-(cd b-opencode && docker compose down && git checkout -- gateway.conf)
+(cd opencode && docker compose down && git checkout -- gateway.conf)
 ```
 
 Also verify statically at any time: `docker compose config` (both projects),

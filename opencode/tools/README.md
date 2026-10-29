@@ -7,7 +7,7 @@ home, and the container has no other route out than the model gateway.
 ## How it works
 
 - The Dockerfile copies this directory to `/opt/tools/` inside the image.
-- The `TOOLS` build arg (set from `b-opencode/.env`) is a space-separated
+- The `TOOLS` build arg (set from `opencode/.env`) is a space-separated
   list of tool names; the Dockerfile runs `tools/<name>.install.sh` for each.
 - To change the toolset: edit `TOOLS` in `.env`, then `docker compose build`.
 
@@ -53,7 +53,7 @@ so tool order in `TOOLS` does not matter.
 1. Create `tools/foo.install.sh` following the convention (make it `chmod +x`,
    though the Dockerfile invokes it via `sh` so the bit is not required).
 2. Append `foo` to `TOOLS` in `.env`.
-3. `docker compose build` (in `b-opencode/`).
+3. `docker compose build` (in `opencode/`).
 
 An unknown name in `TOOLS` fails the build on purpose — fix the list or add
 the script.

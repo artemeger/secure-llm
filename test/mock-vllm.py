@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal OpenAI-compatible stub used to test the full chain WITHOUT vLLM/GPU.
 
-Serves on :8000 (vLLM's port, so a-vllm/nginx.conf works unmodified):
+Serves on :8000 (vLLM's port, so vllm/nginx.conf works unmodified):
   GET  /health                -> 200 ok
   GET  /v1/models             -> canned list containing the real model id
   POST /v1/chat/completions   -> canned completion; supports stream:true (SSE)
