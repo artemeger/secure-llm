@@ -1,0 +1,59 @@
+# Machine A — vLLM (strictly no network) behind an nginx gateway.
+#
+#   vllm  ── net: backend (internal, no egress, no published ports)
+#   nginx ── net: backend + frontend; published on ${A_LAN_IP}:8080 only
+#
+# The full vLLM command lives in ./vllm-cmd.sh (mounted read-only),
+# so swapping model/flags never touches this file.
+# Swap the image tag via VLLM_IMAGE in .env.
+name: secure-llm-vllm
+
+services:
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    # The image's own entrypoint is ["vllm","serve"]; override it so the
+    # mounted script owns the entire invocation.
+    entrypoint: ["/bin/bash", "/vllm-cmd.sh"]
+    volumes:
+      - ./vllm-cmd.sh:/vllm-cmd.sh:ro
+      # Model must be pre-downloaded on the host (see README). The container
+      # is offline and can never fetch it.
+      - ~/.cache/huggingface:/root/.cache/huggingface:ro
+      - ~/.cache/vllm:/root/.cache/vllm
+    environment:
+      MAX_JOBS: "3"
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      HF_HUB_OFFLINE: "1" # hard offline: never contact the hub, even in theory
+      HF_TOKEN: ${HF_TOKEN:-} # only needed if the model repo is gated
+    ipc: host
+    shm_size: "32gb"
+    gpus: all
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      start_period: 300s # model load + MTP warmup is slow
+      interval: 15s
+      timeout: 10s
+      retries: 40
+
+  nginx:
+    image: nginx:stable
+    ports:
+      - "${A_LAN_IP}:8080:8080" # bound to the LAN IP only, never 0.0.0.0
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  backend:
+    internal: true
+  frontend:
+    driver: bridge

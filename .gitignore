@@ -1,0 +1,8 @@
+# Secrets / machine-specific values — never commit
+.env
+# The project directory is mounted into OpenCode, never version-controlled here
+b-opencode/workspace/*
+!b-opencode/workspace/.gitkeep
+# build artifacts
+__pycache__/
+*.pyc
