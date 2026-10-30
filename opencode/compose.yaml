@@ -4,7 +4,7 @@
 #   gateway  ── net: agent + outbound; fixed upstream = Machine A's nginx
 #
 # Host visibility of the opencode container is EXACTLY:
-#   ./workspace       (read-write)
+#   ${WORKSPACE_DIR}  (read-write; host path, set in .env, default ./workspace)
 #   ./opencode.json   (read-only)
 # No published ports. No docker socket. Not privileged.
 name: secure-llm-opencode
@@ -19,7 +19,9 @@ services:
     image: secure-llm/opencode:local
     working_dir: /workspace
     volumes:
-      - ./workspace:/workspace
+      # Host dir is overridable via WORKSPACE_DIR in .env (default ./workspace);
+      # the container always sees it at /workspace:
+      - ${WORKSPACE_DIR:-./workspace}:/workspace
       - ./opencode.json:/home/coder/.config/opencode/opencode.json:ro
     environment:
       TERM: xterm-256color

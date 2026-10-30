@@ -5,8 +5,9 @@
   The vLLM container has **no network at all** (internal-only Docker network,
   no published ports, no NAT, `HF_HUB_OFFLINE=1`).
 - **Machine B (Windows 11 + WSL2, Docker Engine in the distro)** — OpenCode in
-  a container that sees exactly **one host directory** (`workspace/`) plus a
-  read-only `opencode.json`. Air-gapped at runtime; reaches the model only via
+  a container that sees exactly **one host directory** (default `workspace/`,
+  overridable via `WORKSPACE_DIR` in `.env`) plus a read-only `opencode.json`.
+  Air-gapped at runtime; reaches the model only via
   its own hardened nginx gateway whose single fixed destination is Machine A.
 
 ```
@@ -14,7 +15,7 @@ Machine A (A_IP)                                  Machine B (WSL2)
 ┌────────────────────────────────────┐            ┌──────────────────────────────────────┐
 │  vllm  (vllm/vllm-openai:v0.29.0) │            │  opencode (custom minimal image)     │
 │   • net: backend (internal only)   │            │   • net: agent (internal only)       │
-│   • command from ./vllm-cmd.sh     │  LAN       │   • mounts: ./workspace (rw),       │
+│   • command from ./vllm-cmd.sh     │  LAN       │   • mounts: WORKSPACE_DIR (rw),     │
 │   • gpus all, ipc host, shm 32g   │◄──────────►│     ./opencode.json (ro)            │
 │  nginx :1234 → vllm:8000           │            │  gateway (nginx, hardened, ro-root) │
 │   published on A_IP:1234 only      │            │   • fixed upstream A_IP:1234        │
@@ -31,7 +32,7 @@ Request path: `opencode → http://gateway:8080/v1` (internal L2) → gateway ng
 | vLLM has zero egress | kernel: `internal: true` network (no default route, no NAT) |
 | vLLM never contacts HuggingFace | `HF_HUB_OFFLINE=1` |
 | OpenCode cannot reach LAN/internet/host | kernel: internal network, no published ports |
-| OpenCode sees no host files except `workspace/` + `opencode.json` (ro) | compose volume list |
+| OpenCode sees no host files except the `WORKSPACE_DIR` mount (default `workspace/`) + `opencode.json` (ro) | compose volume list |
 | Gateway only ever connects to `A_IP:1234` | reverse proxy with a single fixed `proxy_pass` |
 | Compromised gateway degrades to a useless process | non-root, `cap_drop ALL`, `no-new-privileges`, read-only rootfs, `nginx:alpine` |
 | Other apps on both machines unaffected | **no host firewall rules, no host services, no global NAT/routing changes anywhere** |
@@ -43,7 +44,8 @@ Accepted residuals (documented, not mitigated in this setup):
   Hyper-V Linux VM with its own firewall.
 - `A_IP:1234` is LAN-reachable — no API key by design (LAN trust). Optional:
   `ufw allow from <your-subnet> to any port 1234` on Machine A.
-- `workspace/` is fully read-write by definition — mount only the project.
+- The mounted project dir (`WORKSPACE_DIR`, default `workspace/`) is fully
+  read-write by definition — point it only at the project.
 - Docker isolation is not a sandbox against kernel/container-escape 0-days.
 
 ## Repository layout
@@ -77,7 +79,8 @@ flags: edit that file, `docker compose restart vllm`. Swap the image:
 
 1. `cd opencode && cp .env.example .env` → set `A_LAN_IP` and `TOOLS`,
    then **sync the literal IP in `gateway.conf`**.
-2. Put your project files in `workspace/`.
+2. Point `WORKSPACE_DIR` in `.env` at your project directory (default:
+   `./workspace` next to the compose file).
 3. `docker compose up -d --build` (internet once, for the build).
 4. Use it: `docker compose exec opencode opencode` → model picker →
    `local-vllm / ThinkingCap Qwen3.8 27B (NVFP4)`.
