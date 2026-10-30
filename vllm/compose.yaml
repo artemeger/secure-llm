@@ -1,7 +1,7 @@
 # Machine A — vLLM (strictly no network) behind an nginx gateway.
 #
 #   vllm  ── net: backend (internal, no egress, no published ports)
-#   nginx ── net: backend + frontend; published on ${A_LAN_IP}:8080 only
+#   nginx ── net: backend + frontend; published on ${A_LAN_IP}:1234 only
 #
 # The full vLLM command lives in ./vllm-cmd.sh (mounted read-only),
 # so swapping model/flags never touches this file.
@@ -41,7 +41,7 @@ services:
   nginx:
     image: nginx:stable
     ports:
-      - "${A_LAN_IP}:8080:8080" # bound to the LAN IP only, never 0.0.0.0
+      - "${A_LAN_IP}:1234:1234" # bound to the LAN IP only, never 0.0.0.0
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
